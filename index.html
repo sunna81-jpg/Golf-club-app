@@ -1070,6 +1070,11 @@ function openMemberProfileModal(mode, memberId){
     `;
   }
 
+  let deleteBtn = '';
+  if(existing && existing.id){
+    deleteBtn = `<button class="btn-danger-text" onclick="deleteMemberProfile(${existing.id})">회원 삭제</button>`;
+  }
+
   openModal(`
     <div class="modal-title">${title}
       <button class="icon-btn" style="color:var(--ink-soft)" onclick="closeModal()">✕</button>
@@ -1078,7 +1083,25 @@ function openMemberProfileModal(mode, memberId){
     <div class="field"><label>이름</label><input type="text" id="memberNameInput" placeholder="예: 김민준" value="${esc(nameVal)}"></div>
     ${chartSection}
     <button class="btn-primary" onclick="saveMemberProfile('${mode}', ${memberId||'null'})">저장하기</button>
+    ${deleteBtn}
   `);
+}
+
+async function deleteMemberProfile(memberId){
+  if(!confirm('이 회원을 삭제할까요? 이 회원이 참여했던 라운드·스코어 기록은 그대로 남아있어요.')) return;
+  const m = members.find(x=>x.id===memberId);
+  if(!m) return;
+  members = members.filter(x=>x.id!==memberId);
+  const ok = await safeSet('club-members', members, true);
+  if(ok){
+    if(myName === m.name){
+      myName = null;
+      try{ localStorage.removeItem('my-name'); }catch(e){}
+      updateIdentityDisplay();
+    }
+    closeModal();
+    render();
+  }
 }
 
 function handicapHistory(name){
