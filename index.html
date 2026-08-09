@@ -861,29 +861,27 @@ async function uploadPhotoToStorage(blob, folder){
   return SUPABASE_URL + '/storage/v1/object/public/photos/' + fileName;
 }
 
-function resizeImageFile(file, size){
-  size = size || 160;
+function loadImageFromFile(file){
   return new Promise((resolve, reject)=>{
-    const reader = new FileReader();
-    reader.onload = (ev)=>{
-      const img = new Image();
-      img.onload = async ()=>{
-        const canvas = document.createElement('canvas');
-        canvas.width = size; canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        const minSide = Math.min(img.width, img.height);
-        const sx = (img.width - minSide)/2;
-        const sy = (img.height - minSide)/2;
-        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
-        const blob = await canvasToBlob(canvas, 0.78);
-        resolve(blob);
-      };
-      img.onerror = ()=>reject(new Error('image load failed'));
-      img.src = ev.target.result;
-    };
-    reader.onerror = ()=>reject(new Error('file read failed'));
-    reader.readAsDataURL(file);
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = ()=>{ URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+    img.src = url;
   });
+}
+
+async function resizeImageFile(file, size){
+  size = size || 160;
+  const img = await loadImageFromFile(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const minSide = Math.min(img.width, img.height);
+  const sx = (img.width - minSide)/2;
+  const sy = (img.height - minSide)/2;
+  ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+  return canvasToBlob(canvas, 0.78);
 }
 async function handlePhotoSelect(e, previewId, initId){
   const file = e.target.files[0];
@@ -1365,31 +1363,19 @@ async function deletePhoto(eventId, kind, index){
   if(ok) openEventDetail(eventId);
 }
 
-function resizeImagePreserveAspect(file, maxDim, quality){
+async function resizeImagePreserveAspect(file, maxDim, quality){
   maxDim = maxDim || 640;
   quality = quality || 0.72;
-  return new Promise((resolve, reject)=>{
-    const reader = new FileReader();
-    reader.onload = (ev)=>{
-      const img = new Image();
-      img.onload = async ()=>{
-        let w = img.width, h = img.height;
-        const scale = Math.min(1, maxDim / Math.max(w, h));
-        w = Math.max(1, Math.round(w*scale));
-        h = Math.max(1, Math.round(h*scale));
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        const blob = await canvasToBlob(canvas, quality);
-        resolve(blob);
-      };
-      img.onerror = ()=>reject(new Error('image load failed'));
-      img.src = ev.target.result;
-    };
-    reader.onerror = ()=>reject(new Error('file read failed'));
-    reader.readAsDataURL(file);
-  });
+  const img = await loadImageFromFile(file);
+  let w = img.width, h = img.height;
+  const scale = Math.min(1, maxDim / Math.max(w, h));
+  w = Math.max(1, Math.round(w*scale));
+  h = Math.max(1, Math.round(h*scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvasToBlob(canvas, quality);
 }
 
 async function handleGalleryFilesSelect(e, eventId, kind){
